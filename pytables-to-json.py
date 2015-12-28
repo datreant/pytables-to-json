@@ -464,3 +464,11 @@ class SimFileHDF5(TreantFile):
                     "No such selection '{}'; add it first.".format(handle))
 
         return selection
+
+
+if __name__ == '__main__':
+
+    import argparse
+
+    
+
