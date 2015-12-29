@@ -1,3 +1,11 @@
+#!/usr/bin/env python
+
+description = """Convert datreant Treant, Group and mdsynthesis Sim state files
+              from the deprecated pytables HDF5 format to the current JSON 
+              format.
+
+              """
+
 import os
 import sys
 import fcntl
@@ -12,13 +20,9 @@ from datreant.backends.statefiles import TreantFile, GroupFile
 from mdsynthesis.backends.statefiles import SimFile
 from .core import File
 
-
-# max length in characters for all paths
-pathlength = 511
-
-# max character length of strings used for handles, tags, categories
-namelength = 55
-
+mapping = {'Treant': [TreantFileHDF5, TreantFile],
+           'Group':  [GroupFileHDF5, GroupFile],
+           'Sim':    [SimFileHDF5, SimFile]}
 
 class File(object):
     """File object base class. Implements file locking and reloading methods.
@@ -162,22 +166,6 @@ class TreantFileHDF5(File):
         """
         table = self.handle.get_node('/', 'version')
         return table.cols.version[0]
-
-    @File._read
-    def get_coordinator(self):
-        """Get absolute path to Coordinator.
-
-        :Returns:
-            *coordinator*
-                absolute path to Coordinator directory
-
-        """
-        table = self.handle.get_node('/', 'coordinator')
-        out = table.cols.abspath[0]
-
-        if out == 'None':
-            out = None
-        return out
 
     @File._read
     def get_tags(self):
@@ -469,6 +457,62 @@ class SimFileHDF5(TreantFile):
 if __name__ == '__main__':
 
     import argparse
+    parser = argparse.ArgumentParser(description=description)
 
-    
+    parser.add_argument("statefile", metavar="STATEFILE", nargs='+')
+    args = parser.parse_args()
 
+    for sf in args.statefile:
+        filename = os.path.basename(sf)
+        dirname = os.path.dirname(sf)
+
+        treanttype, uuid, ext = filename.split('.')
+
+        # check that file meets criteria; if not, skip
+        if ((treanttype not in ['Treant', 'Group', 'Sim']) or
+           (ext not 'h5') or (len(uuid) != 36)):
+            print "Unknown file '{}'; skipping".format(sf)
+            continue
+
+        print "Converting '{}' ...".format(sf)
+
+        jsonfile = os.path.join(dirname, '.'.join((treanttype, uuid, 'json')))
+
+        h5_state = mapping[treanttype][0](sf)
+        json_state = mapping[treanttype][1](jsonfile)
+
+        # transfer generic TreantFile components
+        json_state.add_tags(*h5_state.get_tags())
+        json_state.add_categories(**h5_state.get_categories())
+
+        # if a Group, get member records
+        if treanttype == 'Group':
+            for m_uuid in h5_state.get_members_uuid():
+                memberdict = h5_state.get_member(uuid)
+
+                json_state.add_member(m_uuid, memberdict['treanttype'],
+                                      memberdict['abspath'])
+
+
+        # if a Sim, get Universes, Selections, Default, Resnums
+        if treanttype == 'Sim':
+            for uname in h5_state.list_universes():
+                top, traj = h5_state.get_universe(uname)
+
+                json_state.add_universe(uname, top['abspath'][0],
+                                        traj['abspath'].tolist())
+
+                # selections
+                for selname in h5_state.list_selections(uname):
+                    sel = h5_state.get_selection(uname, selname)
+                    json_state.add_selection(uname, selname, *sel)
+
+                # resnums
+                json_state.update_resnums(uname, h5_state.get_resnums(uname))
+
+            # default universe
+            json_state.update_default(h5_state.get_default())
+
+        print "Finished converting '{}'".format(sf)
+
+    print "Finished converting all files."
