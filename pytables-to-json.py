@@ -18,11 +18,7 @@ import numpy as np
 
 from datreant.backends.statefiles import TreantFile, GroupFile
 from mdsynthesis.backends.statefiles import SimFile
-from .core import File
 
-mapping = {'Treant': [TreantFileHDF5, TreantFile],
-           'Group':  [GroupFileHDF5, GroupFile],
-           'Sim':    [SimFileHDF5, SimFile]}
 
 class File(object):
     """File object base class. Implements file locking and reloading methods.
@@ -288,7 +284,7 @@ class GroupFileHDF5(TreantFileHDF5):
         return table.read()[self.memberpaths]
 
 
-class SimFileHDF5(TreantFile):
+class SimFileHDF5(TreantFileHDF5):
     """Main Sim state file.
 
     This file contains all the information needed to store the state of a
@@ -304,7 +300,7 @@ class SimFileHDF5(TreantFile):
                 path to file
 
         """
-        super(SimFile, self).__init__(filename, **kwargs)
+        super(SimFileHDF5, self).__init__(filename, **kwargs)
 
     @File._read
     def get_MDS_version(self):
@@ -456,6 +452,10 @@ class SimFileHDF5(TreantFile):
 
 if __name__ == '__main__':
 
+    mapping = {'Treant': [TreantFileHDF5, TreantFile],
+               'Group':  [GroupFileHDF5, GroupFile],
+               'Sim':    [SimFileHDF5, SimFile]}
+    
     import argparse
     parser = argparse.ArgumentParser(description=description)
 
@@ -470,7 +470,7 @@ if __name__ == '__main__':
 
         # check that file meets criteria; if not, skip
         if ((treanttype not in ['Treant', 'Group', 'Sim']) or
-           (ext not 'h5') or (len(uuid) != 36)):
+           (ext != 'h5') or (len(uuid) != 36)):
             print "Unknown file '{}'; skipping".format(sf)
             continue
 
@@ -488,7 +488,7 @@ if __name__ == '__main__':
         # if a Group, get member records
         if treanttype == 'Group':
             for m_uuid in h5_state.get_members_uuid():
-                memberdict = h5_state.get_member(uuid)
+                memberdict = h5_state.get_member(m_uuid)
 
                 json_state.add_member(m_uuid, memberdict['treanttype'],
                                       memberdict['abspath'])
@@ -500,7 +500,7 @@ if __name__ == '__main__':
                 top, traj = h5_state.get_universe(uname)
 
                 json_state.add_universe(uname, top['abspath'][0],
-                                        traj['abspath'].tolist())
+                                        traj['abspath'][0])
 
                 # selections
                 for selname in h5_state.list_selections(uname):
