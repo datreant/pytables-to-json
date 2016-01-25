@@ -16,8 +16,8 @@ from functools import wraps
 import tables
 import numpy as np
 
-from datreant.backends.statefiles import TreantFile, GroupFile
-from mdsynthesis.backends.statefiles import SimFile
+from datreant.core.backends.statefiles import TreantFile, GroupFile
+
 
 
 class File(object):
@@ -283,6 +283,8 @@ class GroupFileHDF5(TreantFileHDF5):
         table = self.handle.get_node('/', 'members')
         return table.read()[self.memberpaths]
 
+mapping = {'Treant': [TreantFileHDF5, TreantFile],
+           'Group':  [GroupFileHDF5, GroupFile]}
 
 class SimFileHDF5(TreantFileHDF5):
     """Main Sim state file.
@@ -449,12 +451,14 @@ class SimFileHDF5(TreantFileHDF5):
 
         return selection
 
+try: 
+    from mdsynthesis.backends.statefiles import SimFile
+    mapping.update({'Sim': [SimFileHDF5, SimFile]})
+except ImportError:
 
+    pass
 if __name__ == '__main__':
 
-    mapping = {'Treant': [TreantFileHDF5, TreantFile],
-               'Group':  [GroupFileHDF5, GroupFile],
-               'Sim':    [SimFileHDF5, SimFile]}
     
     import argparse
     parser = argparse.ArgumentParser(description=description)
