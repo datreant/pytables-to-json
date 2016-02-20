@@ -504,7 +504,7 @@ if __name__ == '__main__':
                 top, traj = h5_state.get_universe(uname)
 
                 json_state.add_universe(uname, top['abspath'][0],
-                                        traj['abspath'][0])
+                                        *traj['abspath'])
 
                 # selections
                 for selname in h5_state.list_selections(uname):
