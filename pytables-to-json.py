@@ -452,7 +452,7 @@ class SimFileHDF5(TreantFileHDF5):
         return selection
 
 try: 
-    from mdsynthesis.backends.statefiles import Sim
+    from mdsynthesis import Sim
     mapping.update({'Sim': [SimFileHDF5, Sim]})
 except ImportError:
 
@@ -480,13 +480,8 @@ if __name__ == '__main__':
 
         print "Converting '{}' ...".format(sf)
 
-        jsonfile = os.path.join(dirname, '.'.join((treanttype, uuid, 'json')))
-
-        with open(jsonfile, 'w') as js:
-            json.dump({}, js)
-
         h5_state = mapping[treanttype][0](sf)
-        json_state = mapping[treanttype][1](jsonfile)
+        json_state = mapping[treanttype][1](dirname, new=True)
 
         # transfer generic TreantFile components
         json_state.tags.add(*h5_state.get_tags())
@@ -507,20 +502,27 @@ if __name__ == '__main__':
                 top, traj = h5_state.get_universe(uname)
 
                 json_state.universes.add(uname, top['abspath'][0],
-                                        traj['abspath'])
-
-                json_state.universes[uname]
+                                        list(traj['abspath']))
 
                 # selections
                 for selname in h5_state.list_selections(uname):
-                    sel = h5_state.get_selection(uname, selname)
-                    json_state.selections.add(selname, *sel)
+                    with json_state._write:
+                        sel = h5_state.get_selection(uname, selname)
+                        udict = json_state._state['mds']['universes'][uname]
+                        udict['sels'][selname] = [s[0] for s in sel]
 
                 # resnums
-                json_state.resnums(uname, h5_state.get_resnums(uname))
+                with json_state._write:
+                    udict = json_state._state['mds']['universes'][uname]
+                    udict['resnums'] = list(h5_state.get_resnums(uname))
 
             # default universe
             json_state.default = h5_state.get_default()
+
+        # finally, we set the uuid to the old one
+        os.rename(json_state.filepath,
+                  os.path.join(dirname,
+                        "{}.{}.json".format(json_state.treanttype, uuid)))
 
         print "Finished converting '{}'".format(sf)
 
