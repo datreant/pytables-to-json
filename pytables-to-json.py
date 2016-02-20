@@ -8,6 +8,7 @@ description = """Convert datreant Treant, Group and mdsynthesis Sim state files
 
 import os
 import sys
+import json
 import fcntl
 import logging
 import warnings
@@ -16,8 +17,7 @@ from functools import wraps
 import tables
 import numpy as np
 
-from datreant.core.backends.statefiles import TreantFile, GroupFile
-
+from datreant.core import Treant, Group
 
 
 class File(object):
@@ -283,8 +283,8 @@ class GroupFileHDF5(TreantFileHDF5):
         table = self.handle.get_node('/', 'members')
         return table.read()[self.memberpaths]
 
-mapping = {'Treant': [TreantFileHDF5, TreantFile],
-           'Group':  [GroupFileHDF5, GroupFile]}
+mapping = {'Treant': [TreantFileHDF5, Treant],
+           'Group':  [GroupFileHDF5, Group]}
 
 class SimFileHDF5(TreantFileHDF5):
     """Main Sim state file.
@@ -452,8 +452,8 @@ class SimFileHDF5(TreantFileHDF5):
         return selection
 
 try: 
-    from mdsynthesis.backends.statefiles import SimFile
-    mapping.update({'Sim': [SimFileHDF5, SimFile]})
+    from mdsynthesis.backends.statefiles import Sim
+    mapping.update({'Sim': [SimFileHDF5, Sim]})
 except ImportError:
 
     pass
@@ -482,19 +482,22 @@ if __name__ == '__main__':
 
         jsonfile = os.path.join(dirname, '.'.join((treanttype, uuid, 'json')))
 
+        with open(jsonfile, 'w') as js:
+            json.dump({}, js)
+
         h5_state = mapping[treanttype][0](sf)
         json_state = mapping[treanttype][1](jsonfile)
 
         # transfer generic TreantFile components
-        json_state.add_tags(*h5_state.get_tags())
-        json_state.add_categories(**h5_state.get_categories())
+        json_state.tags.add(*h5_state.get_tags())
+        json_state.categories.add(**h5_state.get_categories())
 
         # if a Group, get member records
         if treanttype == 'Group':
             for m_uuid in h5_state.get_members_uuid():
                 memberdict = h5_state.get_member(m_uuid)
 
-                json_state.add_member(m_uuid, memberdict['treanttype'],
+                json_state._add_member(m_uuid, memberdict['treanttype'],
                                       memberdict['abspath'])
 
 
@@ -503,19 +506,21 @@ if __name__ == '__main__':
             for uname in h5_state.list_universes():
                 top, traj = h5_state.get_universe(uname)
 
-                json_state.add_universe(uname, top['abspath'][0],
-                                        *traj['abspath'])
+                json_state.universes.add(uname, top['abspath'][0],
+                                        traj['abspath'])
+
+                json_state.universes[uname]
 
                 # selections
                 for selname in h5_state.list_selections(uname):
                     sel = h5_state.get_selection(uname, selname)
-                    json_state.add_selection(uname, selname, *sel)
+                    json_state.selections.add(selname, *sel)
 
                 # resnums
-                json_state.update_resnums(uname, h5_state.get_resnums(uname))
+                json_state.resnums(uname, h5_state.get_resnums(uname))
 
             # default universe
-            json_state.update_default(h5_state.get_default())
+            json_state.default = h5_state.get_default()
 
         print "Finished converting '{}'".format(sf)
 
